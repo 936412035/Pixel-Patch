@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>像素补丁 v0.20.1 · AI 区域换图工具</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">P</div>
+        <div>
+          <div class="brand-title-row">
+            <h1>像素补丁</h1>
+            <div class="version-status">
+              <button class="version-badge" id="updateStatusBtn" type="button" title="点击检查软件更新">v0.20.1</button>
+              <button class="update-new-badge" id="updateNewBadge" type="button" title="发现新版本，点击查看" hidden>NEW</button>
+            </div>
+          </div>
+          <p>只替换需要 AI 修改的区域，原图其余部分保持原分辨率</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="button ghost" id="newProjectBtn">新建</button>
+        <button class="button ghost" id="loadProjectBtn">读取项目</button>
+        <button class="button ghost" id="saveProjectBtn">保存项目</button>
+        <input id="showOutlineCheck" type="checkbox" checked hidden>
+        <button class="button ghost selected" id="toggleOutlineBtn" disabled>隐藏绿色方框</button>
+        <button class="button secondary" id="exportPsdBtn" disabled>导出 PSD</button>
+        <button class="button primary" id="exportFinalBtn" disabled>导出 PNG</button>
+      </div>
+    </header>
+
+    <main class="workspace" id="workspace">
+      <aside class="sidebar left-panel">
+        <section class="step-card active" id="sourceCard">
+          <div class="step-heading">
+            <span class="step-number">1</span>
+            <div><h2>载入原图</h2><p>原图只作为底图，不会被 AI 重绘</p></div>
+          </div>
+          <button class="drop-zone" id="sourceDrop">
+            <span class="drop-icon">＋</span>
+            <strong>选择或拖入原图</strong>
+            <small>PNG / JPG / WEBP / BMP</small>
+          </button>
+          <div class="file-info hidden" id="sourceInfo"></div>
+        </section>
+
+        <section class="step-card disabled" id="selectCard">
+          <div class="step-heading">
+            <span class="step-number">2</span>
+            <div><h2>框选替换区域</h2><p>在画布上按住鼠标拖出矩形</p></div>
+          </div>
+          <div class="tool-row">
+            <button class="tool-button selected" id="selectToolBtn" title="框选区域 (S)">▱ <span>框选</span></button>
+            <button class="tool-button" id="moveToolBtn" title="移动贴图 (V)">✥ <span>移动贴图</span></button>
+          </div>
+          <label class="field-label" for="selectionRatio">选区比例</label>
+          <select class="ratio-select" id="selectionRatio" disabled>
+            <option value="free">自由比例</option>
+            <option value="1">1:1 方形</option>
+            <option value="1.3333333333">4:3 横向</option>
+            <option value="0.75">3:4 竖向</option>
+            <option value="1.5">3:2 横向</option>
+            <option value="0.6666666667">2:3 竖向</option>
+            <option value="1.7777777778">16:9 横向</option>
+            <option value="0.5625">9:16 竖向</option>
+            <option value="2.3333333333">21:9 超宽</option>
+          </select>
+          <div class="coords-grid">
+            <label class="scrub-label" data-scrub="selX" data-scrub-step="1">X ↔ <input id="selX" type="number" min="0" step="1" disabled></label>
+            <label class="scrub-label" data-scrub="selY" data-scrub-step="1">Y ↔ <input id="selY" type="number" min="0" step="1" disabled></label>
+            <label class="scrub-label" data-scrub="selW" data-scrub-step="1">宽 ↔ <input id="selW" type="number" min="1" step="1" disabled></label>
+            <label class="scrub-label" data-scrub="selH" data-scrub-step="1">高 ↔ <input id="selH" type="number" min="1" step="1" disabled></label>
+          </div>
+          <div class="two-buttons">
+            <button class="button secondary" id="exportCropBtn" disabled>导出选区 PNG</button>
+            <button class="button ghost" id="copyCropBtn" disabled>复制选区</button>
+          </div>
+          <p class="hint">框内或边缘拖动可移动；拖动角点调整大小。自由比例下，Shift 新建 1:1 选区、缩放时锁定当前比例。</p>
+        </section>
+
+        <section class="step-card disabled" id="replaceCard">
+          <div class="step-heading">
+            <span class="step-number">3</span>
+            <div><h2>放入 AI 结果</h2><p>尺寸不同也会自动等比例对齐</p></div>
+          </div>
+          <button class="drop-zone compact" id="replacementDrop">
+            <span class="drop-icon">↥</span>
+            <strong>选择、拖入或 Ctrl+V 粘贴</strong>
+            <small>建议使用 AI 输出的 PNG</small>
+          </button>
+          <div class="file-info hidden" id="replacementInfo"></div>
+        </section>
+      </aside>
+
+      <section class="stage-wrap" id="stageWrap">
+        <div class="canvas-toolbar">
+          <div class="status-pill"><span class="status-dot"></span><span id="statusText">等待载入原图</span></div>
+          <div class="view-tools">
+            <button id="zoomOutBtn" title="缩小">−</button>
+            <span id="zoomLabel">100%</span>
+            <button id="zoomInBtn" title="放大">＋</button>
+            <button id="fitBtn" title="适合窗口">适应</button>
+          </div>
+        </div>
+        <div class="canvas-container" id="canvasContainer" tabindex="0">
+          <canvas id="editorCanvas"></canvas>
+          <div class="brush-cursor" id="brushCursor"></div>
+          <div class="empty-state" id="emptyState">
+            <div class="empty-visual">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <h2>先放入一张原图</h2>
+            <p>然后框出需要 AI 更换的头部或其他区域</p>
+            <button class="button primary" id="emptyOpenBtn">打开图片</button>
+          </div>
+        </div>
+        <div class="canvas-footer">
+          <span id="imageSizeLabel">原图：—</span>
+          <span>滚轮缩放 · 空格/中键拖动画布 · 方向键微调</span>
+          <span id="cursorLabel">x: — &nbsp; y: —</span>
+        </div>
+      </section>
+
+      <aside class="sidebar right-panel locked" id="rightPanel">
+        <div class="right-panel-head">
+          <div><strong>贴图调整</strong><small>最多回退 20 步</small></div>
+          <button class="undo-button" id="undoBtn" disabled title="回退 (Ctrl+Z)">↶ 回退</button>
+        </div>
+        <nav class="panel-tabs" id="panelTabs">
+          <button class="selected" data-panel="placement">位置大小</button>
+          <button data-panel="mask">蒙版画笔</button>
+          <button data-panel="color">色彩调整</button>
+        </nav>
+
+        <div class="tab-panel selected" data-panel-content="placement">
+        <section class="control-card">
+          <div class="section-title"><h2>位置大小调整</h2><button class="text-button" id="resetPlacementBtn" disabled>重置</button></div>
+
+          <label class="field-label">对齐方式</label>
+          <div class="segmented" id="fitModeGroup">
+            <button data-fit="cover">铺满裁切</button>
+            <button class="selected" data-fit="contain">完整放入</button>
+          </div>
+
+          <div class="slider-field">
+            <div><label for="scaleRange" class="scrub-label" data-scrub="scaleRange" data-scrub-step="1">缩放 ↔</label><span class="inline-number"><input id="scaleOutput" type="number" min="10" max="400" value="100" step="1"><i>%</i></span></div>
+            <input id="scaleRange" type="range" min="10" max="400" value="100" step="1" disabled>
+          </div>
+          <div class="slider-field">
+            <div><label for="opacityRange" class="scrub-label" data-scrub="opacityRange" data-scrub-step="1">透明度 ↔</label><span class="inline-number"><input id="opacityOutput" type="number" min="0" max="100" value="100" step="1"><i>%</i></span></div>
+            <input id="opacityRange" type="range" min="0" max="100" value="100" step="1" disabled>
+          </div>
+          <button class="button ghost compare-button" id="holdOriginalBtn" disabled>按住显示原图</button>
+          <div class="slider-field">
+            <div><label for="rotationRange" class="scrub-label" data-scrub="rotationRange" data-scrub-step=".5">旋转 ↔</label><span class="inline-number"><input id="rotationOutput" type="number" min="-180" max="180" value="0" step="0.1"><i>°</i></span></div>
+            <input id="rotationRange" type="range" min="-180" max="180" value="0" step="0.1" disabled>
+          </div>
+          <div class="slider-field">
+            <div><label for="featherRange" class="scrub-label" data-scrub="featherRange" data-scrub-step="1">边缘羽化 ↔</label><span class="inline-number"><input id="featherOutput" type="number" min="0" max="100" value="0" step="1"><i>px</i></span></div>
+            <input id="featherRange" type="range" min="0" max="100" value="0" step="1" disabled>
+          </div>
+
+          <label class="field-label">精确位置（相对选区中心）</label>
+          <div class="position-grid">
+            <label class="scrub-label" data-scrub="offsetX" data-scrub-step="1">水平 X ↔ <input id="offsetX" type="number" value="0" step="1" disabled><span>px</span></label>
+            <label class="scrub-label" data-scrub="offsetY" data-scrub-step="1">垂直 Y ↔ <input id="offsetY" type="number" value="0" step="1" disabled><span>px</span></label>
+          </div>
+          <div class="nudge-pad" aria-label="微调位置">
+            <button data-nudge="0,-1" title="上移 1 像素">↑</button>
+            <button data-nudge="-1,0" title="左移 1 像素">←</button>
+            <button data-nudge="0,1" title="下移 1 像素">↓</button>
+            <button data-nudge="1,0" title="右移 1 像素">→</button>
+          </div>
+          <p class="hint">在画布上直接拖动贴图；方向键移动 1 px，Shift + 方向键移动 10 px。</p>
+        </section>
+        </div>
+
+        <div class="tab-panel" data-panel-content="mask">
+        <section class="control-card mask-card">
+          <div class="section-title"><h2>蒙版画笔</h2><button class="text-button" id="resetMaskBtn" disabled>重置蒙版</button></div>
+          <div class="segmented" id="brushModeGroup">
+            <button class="selected" data-brush-mode="erase">恢复原图</button>
+            <button data-brush-mode="paint">画入 AI</button>
+          </div>
+          <label class="field-label">笔刷边缘</label>
+          <div class="segmented" id="brushEdgeGroup">
+            <button data-brush-edge="hard">硬边圆形</button>
+            <button class="selected" data-brush-edge="soft">软边圆形</button>
+          </div>
+          <div class="slider-field">
+            <div><label for="brushSizeRange" class="scrub-label" data-scrub="brushSizeRange" data-scrub-step="1">笔触大小 ↔</label><output id="brushSizeOutput">80 px</output></div>
+            <input id="brushSizeRange" type="range" min="1" max="500" value="80" step="1" disabled>
+          </div>
+          <div class="slider-field">
+            <div><label for="brushOpacityRange" class="scrub-label" data-scrub="brushOpacityRange" data-scrub-step="1">笔触不透明度 ↔</label><output id="brushOpacityOutput">50%</output></div>
+            <input id="brushOpacityRange" type="range" min="0" max="100" value="50" step="1" disabled>
+          </div>
+          <p class="hint">选择“蒙版笔刷”后在画面上涂抹。恢复原图适合擦除 AI 图多余边缘，画入 AI 可补回擦除部分。</p>
+        </section>
+        </div>
+
+        <div class="tab-panel" data-panel-content="color">
+          <section class="control-card color-card">
+            <div class="section-title"><h2>本地 Lab 校色</h2><button class="text-button" id="resetColorBtn" disabled>重置颜色</button></div>
+            <button class="button secondary wide" id="autoMatchColorBtn" disabled>自动匹配原选区颜色</button>
+            <p class="color-status" id="localColorStatus">以原选区为参考，在本机计算，不上传图片。</p>
+
+            <div class="slider-field">
+              <div><label for="colorStrengthRange" class="scrub-label" data-scrub="colorStrengthRange" data-scrub-step="1">自动匹配强度 ↔</label><span class="inline-number"><input id="colorStrengthOutput" type="number" min="0" max="100" value="100"><i>%</i></span></div>
+              <input id="colorStrengthRange" type="range" min="0" max="100" value="100" step="1" disabled>
+            </div>
+            <div class="lab-grid-title"><span>手动 Lab 微调</span><small>原选区 → AI 结果</small></div>
+            <div class="slider-field">
+              <div><label for="colorLRange" class="scrub-label" data-scrub="colorLRange" data-scrub-step=".2">亮度 L ↔</label><span class="inline-number"><input id="colorLOutput" type="number" min="-30" max="30" value="0" step="0.1"><i></i></span></div>
+              <input id="colorLRange" type="range" min="-30" max="30" value="0" step="0.1" disabled>
+            </div>
+            <div class="slider-field">
+              <div><label for="colorARange" class="scrub-label" data-scrub="colorARange" data-scrub-step=".2">绿 ← a → 红</label><span class="inline-number"><input id="colorAOutput" type="number" min="-30" max="30" value="0" step="0.1"><i></i></span></div>
+              <input id="colorARange" type="range" min="-30" max="30" value="0" step="0.1" disabled>
+            </div>
+            <div class="slider-field">
+              <div><label for="colorBRange" class="scrub-label" data-scrub="colorBRange" data-scrub-step=".2">蓝 ← b → 黄</label><span class="inline-number"><input id="colorBOutput" type="number" min="-30" max="30" value="0" step="0.1"><i></i></span></div>
+              <input id="colorBRange" type="range" min="-30" max="30" value="0" step="0.1" disabled>
+            </div>
+            <div class="slider-field">
+              <div><label for="colorSaturationRange" class="scrub-label" data-scrub="colorSaturationRange" data-scrub-step="1">饱和度 ↔</label><span class="inline-number"><input id="colorSaturationOutput" type="number" min="-100" max="100" value="0"><i>%</i></span></div>
+              <input id="colorSaturationRange" type="range" min="-100" max="100" value="0" step="1" disabled>
+            </div>
+            <div class="slider-field">
+              <div><label for="colorTemperatureRange" class="scrub-label" data-scrub="colorTemperatureRange" data-scrub-step="1">色温 ↔</label><span class="inline-number"><input id="colorTemperatureOutput" type="number" min="-100" max="100" value="0"><i></i></span></div>
+              <input id="colorTemperatureRange" type="range" min="-100" max="100" value="0" step="1" disabled>
+            </div>
+          </section>
+
+          <section class="control-card ai-color-card">
+            <div class="section-title"><h2>AI 校色（可选）</h2><span class="api-badge">API</span></div>
+            <p class="proxy-state checking" id="localProxyState">正在检查本地代理…</p>
+            <label class="api-field">服务平台
+              <select id="apiProvider">
+                <option value="openai">OpenAI</option>
+                <option value="qwen">通义千问（阿里云百炼）</option>
+                <option value="minimax">MiniMax / 海螺</option>
+                <option value="lovart">Lovart（控制台接口）</option>
+                <option value="custom">自定义 OpenAI 兼容接口</option>
+              </select>
+            </label>
+            <p class="provider-hint" id="providerHint"></p>
+            <label class="api-field">接口地址<input id="apiEndpoint" type="url" value="https://api.openai.com/v1/images/edits" spellcheck="false"></label>
+            <label class="api-field">模型<input id="apiModel" type="text" value="gpt-image-2" spellcheck="false"></label>
+            <div class="provider-url-fields hidden" id="providerUrlFields">
+              <label class="api-field">待校色图公网 URL<input id="targetPublicUrl" type="url" placeholder="https://…" spellcheck="false"></label>
+              <label class="api-field">原选区参考图公网 URL<input id="referencePublicUrl" type="url" placeholder="https://…" spellcheck="false"></label>
+              <p class="hint">MiniMax 图像参考接口目前要求可公开访问的图片 URL；这里的地址仅随本次请求发送。</p>
+            </div>
+            <label class="api-field">API Key<input id="apiKey" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false"></label>
+            <p class="hint secure-note">密钥只保留在当前页面内存，经 127.0.0.1 本地代理转发，不会写入项目或浏览器存储。</p>
+            <div class="prompt-head"><label for="aiColorPrompt">校色提示词</label><button class="text-button" id="generatePromptBtn">自动生成</button></div>
+            <textarea id="aiColorPrompt" rows="7" spellcheck="false"></textarea>
+            <label class="check-row"><input id="autoPromptCheck" type="checkbox" checked><span>发送前按色差自动更新提示词</span></label>
+            <button class="button primary wide" id="aiColorBtn" disabled>AI 自动校色</button>
+            <div class="ai-progress hidden" id="aiProgress">
+              <div><span id="aiProgressText">准备图片…</span><strong id="aiProgressPercent">0%</strong></div>
+              <div class="progress-track"><i id="aiProgressBar"></i></div>
+            </div>
+            <div class="ai-result-state" id="aiResultState">尚未进行 AI 校色</div>
+            <label class="compare-switch disabled" id="aiCompareLabel">
+              <input id="aiCompareToggle" type="checkbox" disabled>
+              <span class="switch-ui"></span>
+              <span>显示 AI 校色前</span>
+            </label>
+          </section>
+        </div>
+
+      </aside>
+    </main>
+  </div>
+
+  <input id="sourceInput" type="file" accept="image/*" hidden>
+  <input id="replacementInput" type="file" accept="image/*" hidden>
+  <input id="projectInput" type="file" accept="application/json,.json" hidden>
+  <dialog class="update-dialog" id="updateDialog" aria-labelledby="updateDialogTitle">
+    <div class="update-dialog-head">
+      <div>
+        <span class="update-kicker">PIXEL PATCH UPDATE</span>
+        <h2 id="updateDialogTitle">软件更新</h2>
+      </div>
+      <button class="dialog-close" id="closeUpdateBtn" type="button" aria-label="关闭">×</button>
+    </div>
+    <div class="update-version-grid">
+      <div><span>当前版本</span><strong id="currentVersionLabel">v0.20.1</strong></div>
+      <div><span>最新版本</span><strong id="latestVersionLabel">检查中…</strong></div>
+    </div>
+    <p class="update-message" id="updateMessage">正在连接 GitHub Releases 检查新版本…</p>
+    <div class="update-progress" id="updateProgress" hidden><i></i></div>
+    <section class="release-notes" id="releaseNotesWrap" hidden>
+      <h3>版本说明</h3>
+      <pre id="releaseNotes"></pre>
+    </section>
+    <p class="update-safety">更新包将从项目的公开 GitHub Releases 下载并校验 SHA-256。安装前会自动备份当前文件，失败时恢复原版本。</p>
+    <div class="update-actions">
+      <button class="button ghost" id="checkUpdateBtn" type="button">重新检查</button>
+      <button class="button primary" id="installUpdateBtn" type="button" disabled>下载并安装</button>
+    </div>
+  </dialog>
+  <div class="toast" id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+    "name":  "像素补丁",
+    "version":  "0.20.1",
+    "repository":  "936412035/Pixel-Patch",
+    "updateManifests":  [
+                            "https://raw.githubusercontent.com/936412035/Pixel-Patch/main/version.json",
+                            "https://cdn.jsdelivr.net/gh/936412035/Pixel-Patch@main/version.json"
+                        ],
+    "releaseAsset":  "AI区域换图工具-v{version}.zip",
+    "launcher":  "启动-区域换图工具-v0.20.1.cmd",
+    "files":  [
+                  "index.html",
+                  "styles.css",
+                  "app.js",
+                  "server.ps1",
+                  "updater.ps1",
+                  "restart-server.ps1",
+                  "version.json",
+                  "使用说明.txt",
+                  "启动-区域换图工具-v0.20.1.cmd"
+              ]
+}
